@@ -12,6 +12,11 @@ installing this skill does not authorize a new provider or a different task.
 
 ## Local installation and defaults
 
+This fork is distributed as `@zeta987/oracle`. Install it with
+`npm install -g @zeta987/oracle` and update it with `npm update -g @zeta987/oracle`
+when the user requests installation or updates. Its CLI command remains `oracle`;
+the package version uses `<upstream-version>-zeta.<revision>`.
+
 Use the installed `oracle` command (`Get-Command oracle -All` locates Windows
 shims). Do not switch to
 `npx @steipete/oracle` just to invoke it: the downloaded package can differ from

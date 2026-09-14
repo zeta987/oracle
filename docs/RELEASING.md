@@ -1,70 +1,42 @@
-# Release Checklist (npm + Homebrew)
+# Zeta npm release procedure
 
-> For a guarded, phased flow, run `./scripts/release.sh <phase>` (gates | artifacts | publish | smoke | tag | github-release | all); it stops on the first error so you can resume after fixing issues.
+This guide publishes `@zeta987/oracle` from `zeta987/oracle`. It does not publish the upstream package or update the upstream Homebrew tap.
 
-1. **Version & metadata**
-   - [ ] Update `package.json` version (e.g., `1.0.0`).
-   - [ ] Update any mirrored version strings (CLI banner/help, docs metadata) to match.
-   - [ ] Confirm package metadata (name, description, repository, keywords, license, `files`/`.npmignore`).
-   - [ ] If dependencies changed, run `pnpm install` so `pnpm-lock.yaml` is current.
-   - [ ] Source `~/.profile` so codesign/notary env vars are available before building the notifier.
-2. **Artifacts**
-   - [ ] Run `./scripts/release.sh artifacts` (builds `dist/`, packs npm, and generates checksums).
-   - [ ] Verify `bin` mapping in `package.json` points to `dist/bin/oracle-cli.js`.
+## Version
 
-- [ ] Keep the generated `.release-artifacts/oracle-<version>.tgz{,.sha1,.sha256}` for the GitHub release.
-  - `.release-artifacts/` is gitignored; do **not** commit these files.
-  - Set `ARTIFACT_DIR` to override the artifact directory; use the same directory for `github-release`.
-- [ ] Rebuild macOS notifier helper with signing + notarization:
-  - `cd vendor/oracle-notifier && ./build-notifier.sh` (requires `CODESIGN_ID` and `APP_STORE_CONNECT_*`).
-  - Signing inputs (same as Trimmy): `CODESIGN_ID="Developer ID Application: Peter Steinberger (Y5PE65HELJ)"` plus notary env vars `APP_STORE_CONNECT_API_KEY_P8`, `APP_STORE_CONNECT_KEY_ID`, and `APP_STORE_CONNECT_ISSUER_ID`.
-  - Sparkle ed25519 private key lives at `/Users/steipete/Library/CloudStorage/Dropbox/Backup/Sparkle`; export `SPARKLE_PRIVATE_KEY_FILE` to that path whenever the build script needs to sign an appcast/enclosure.
-  - Verify tickets: `xcrun stapler validate vendor/oracle-notifier/OracleNotifier.app` and `spctl -a -t exec -vv vendor/oracle-notifier/OracleNotifier.app`.
+Use `<upstream-version>-zeta.<revision>`. The first release based on upstream 0.20.3 is `0.20.3-zeta.1`. For each subsequent fork release:
 
-3. **Changelog & docs**
+```powershell
+npm run version:zeta
+```
 
-- [ ] Update `CHANGELOG.md` (or release notes) with highlights.
-- [ ] Keep changelog entries product-facing only; avoid adding release-status/meta lines (e.g., “Published to npm …”)—that belongs in the GitHub release body.
-- [ ] Verify changelog structure: versions strictly descending, no duplicates or skipped numbers, single heading per version.
-- [ ] Ensure README reflects current CLI options (globs, `--status`, heartbeat behavior).
-- [ ] **Release notes must exactly match the version’s changelog section** (full Added/Changed/Fixed/Tests bullets, no omissions). After creating the GitHub release, compare the body to `CHANGELOG.md` and fix any mismatch.
+For a new upstream base, explicitly set the new base with revision 1 using `npm version <base>-zeta.1 --no-git-tag-version`. Update [CHANGELOG-ZETA.md](../CHANGELOG-ZETA.md); preserve upstream history in CHANGELOG.md.
 
-4. **Validation**
-   - [ ] `pnpm run check` (zero warnings allowed; fail on any lint/type warnings).
-   - [ ] `pnpm vitest`
-   - [ ] `pnpm run lint`
-   - [ ] Optional live smoke (with real `OPENAI_API_KEY`): `ORACLE_LIVE_TEST=1 pnpm vitest run tests/live/openai-live.test.ts`
-   - [ ] MCP sanity check: with `config/mcporter.json` pointed at the local stdio server (`oracle-local`), run `mcporter list oracle-local --schema --config config/mcporter.json` after building (`pnpm build`) to ensure tools/resources are discoverable.
-5. **Publish (npm)**
-   - [ ] Ensure git status is clean; commit and push any pending changes.
-   - [ ] Avoid repeated browser auth: create a granular access token with **write** + **Bypass 2FA** at npmjs.com/settings/~/tokens, then export it (e.g., `export NPM_TOKEN=...` in `~/.profile`) and set `//registry.npmjs.org/:_authToken=${NPM_TOKEN}` in `~/.npmrc`.
-   - [ ] Use the `NPM_TOKEN` from `~/.profile` (our “NPM out token”). If `npm publish` opens browser auth, the token wasn’t loaded—rerun with `source ~/.profile`.
-   - [ ] Confirm auth: `npm whoami`.
-   - [ ] Decide tag before publish:
-     - If npm `latest` is ahead (e.g., `npm view @steipete/oracle version` shows a higher major), publish with `--tag legacy`.
-     - If this should become latest, publish with `--tag latest` (or publish then `npm dist-tag add @steipete/oracle@X.Y.Z latest`).
-   - [ ] `npm publish --access public --tag <legacy|latest>` (2FA OTP required even with token).
-   - [ ] If promoting later: `npm dist-tag add @steipete/oracle@X.Y.Z latest --otp <code>` (OTP required).
-   - [ ] `npm view @steipete/oracle version` (and optionally `npm view @steipete/oracle time`) to confirm the registry shows the new version.
-   - [ ] Verify positional prompt still works: `npx -y @steipete/oracle "Test prompt" --dry-run`.
-6. **Homebrew (tap)**
-   - [ ] The `Update Homebrew Tap` workflow preflights the tarball and both checksum assets after the GitHub release is published: it verifies their hashes and the public tarball URL before dispatching `steipete/homebrew-tap`.
-   - [ ] Missing assets or failed verification stop the job before dispatch. Run `./scripts/release.sh github-release`, then re-run `.github/workflows/update-homebrew-tap.yml` via `workflow_dispatch` with the release tag (`tag=vX.Y.Z`). For an older release, do not rebuild: download the published npm tarball (`npm view @steipete/oracle@X.Y.Z dist.tarball`), verify it against `dist.integrity`, place it in `ARTIFACT_DIR` as `oracle-X.Y.Z.tgz` with `.sha1`/`.sha256` files, and run the phase with `VERSION=X.Y.Z`.
-   - [ ] Confirm the tap workflow updated `Formula/oracle.rb` to the GitHub release asset and committed the SHA256.
-   - [ ] Verify install:
-     - `brew uninstall oracle || true`
-     - `brew tap steipete/tap || true`
-     - `brew install steipete/tap/oracle`
-     - `oracle --version`
-     - `brew uninstall oracle`
-7. **Post-publish**
+## Prepare and validate
 
-- [ ] Run `./scripts/release.sh tag` so `vX.Y.Z` exists on origin (always tag each release).
-- [ ] Run `./scripts/release.sh github-release`: create a draft with title `X.Y.Z` and the full version's changelog section (without its heading), upload the tarball and both checksums, verify the downloads, publish, and re-verify the public tarball URL. Publishing triggers the Homebrew tap workflow, which also waits for that URL to become available.
-  - Existing releases keep their notes; identical assets are skipped, and conflicting assets fail without overwriting.
-- [ ] Confirm the GitHub release body exactly matches the `CHANGELOG.md` section for `X.Y.Z` (full bullet list). If not, update with `gh release edit vX.Y.Z --notes-file <file>`.
-- [ ] Confirm npm shows the new version: `npm view @steipete/oracle version` and `npx -y @steipete/oracle@X.Y.Z --version`.
-- [ ] Promote desired dist-tag (e.g., `npm dist-tag add @steipete/oracle@X.Y.Z latest`).
-- [ ] From a clean temp directory (no package.json/node_modules), run `npx @steipete/oracle@X.Y.Z "Smoke from empty dir" --dry-run` to confirm the package installs/executes via npx.
-- [ ] After verification, remove the generated tarball/checksum assets (`trash .release-artifacts`, or the overridden `ARTIFACT_DIR`).
-- [ ] Announce / share release notes.
+1. Confirm `npm whoami` is the authorized publisher and check that the target version does not already exist. Never display auth tokens.
+2. Check package name, version, repository, license, public access, and the unchanged `oracle` / `oracle-mcp` bin names.
+3. Install the locked dependencies, then run the repository checks and tests appropriate to the release:
+   `pnpm install --frozen-lockfile --ignore-scripts`, `pnpm run check`, `pnpm test`, `pnpm run build`, and `pnpm test:packed-cli`.
+4. Keep the tested tarball under the ignored `.release-artifacts/` directory. Inspect its file list, package identity, version, required built entrypoints, skill and docs. Personal config, sessions, credentials and temporary audit files must not be present.
+5. Commit with the configured signature, verify it, and push only to the user's fork. Create and verify a signed `v<version>` tag for the release. Retain the exact tested tarball and checksum.
+
+## Publish the tested artifact
+
+```powershell
+npm publish ./.release-artifacts/zeta987-oracle-0.20.3-zeta.1.tgz --access public --tag latest --ignore-scripts
+```
+
+Use the actual tarball filename and version for later releases. `latest` is intentional even though `-zeta.N` has SemVer prerelease syntax; it is the fork's normal update channel.
+
+If npm requests interactive login or an OTP, let the account owner complete it. Keep the pending operation and do not restart publishing blindly. Never request or print a long-lived token to work around an authentication error.
+
+## Verify publication
+
+```powershell
+npm view @zeta987/oracle version dist-tags dist.integrity --json
+```
+
+Compare the published identity/integrity with the tested artifact. Install from npm into a clean temporary directory or prefix and verify `oracle --version`, CLI/MCP entrypoints, and the packaged skill. Migrate any old global `@steipete/oracle` link separately before installing the new package, because both packages provide the same command names.
+
+A GitHub Release may be added using the matching CHANGELOG-ZETA.md entry and exact tested assets when requested. GitHub Actions trusted publishing can automate future releases after its npm package trust is configured; do not assume that trust already exists.

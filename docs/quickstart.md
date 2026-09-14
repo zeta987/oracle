@@ -110,7 +110,7 @@ Drop this in `AGENTS.md` or `CLAUDE.md`:
 
 ```
 - Oracle bundles a prompt plus the right files so a Pro model (GPT-5.5 Pro, Gemini 3 Pro, Claude Opus) can answer. Use when stuck, debugging, or reviewing.
-- Run `npx -y @steipete/oracle --help` once per session before first use.
+- Run `npx -y @zeta987/oracle --help` once per session before first use.
 ```
 
 Or wire MCP — see [MCP](mcp.md) and [Agents](agents.md).

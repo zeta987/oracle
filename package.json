@@ -1,17 +1,17 @@
 {
-  "name": "@steipete/oracle",
-  "version": "0.20.3",
-  "description": "CLI wrapper around OpenAI Responses API with GPT-5.6 Sol, GPT-5.6, GPT-5.5 Pro, GPT-5.5, GPT-5.4, GPT-5.2, GPT-5.1, and GPT-5.1 Codex high reasoning modes.",
+  "name": "@zeta987/oracle",
+  "version": "0.20.3-zeta.1",
+  "description": "Zeta's Oracle fork: CLI and MCP second-model reviews, GPT-5.6 Sol Extra High and GPT-6 Pro browser support.",
   "keywords": [],
-  "homepage": "https://askoracle.sh",
+  "homepage": "https://github.com/zeta987/oracle#readme",
   "bugs": {
-    "url": "https://github.com/steipete/oracle/issues"
+    "url": "https://github.com/zeta987/oracle/issues"
   },
   "license": "MIT",
   "author": "",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/steipete/oracle.git"
+    "url": "git+https://github.com/zeta987/oracle.git"
   },
   "bin": {
     "oracle": "dist/bin/oracle-cli.js",
@@ -24,11 +24,21 @@
     "vendor/oracle-notifier/OracleNotifier.app/**",
     "vendor/oracle-notifier/build-notifier.sh",
     "README.md",
+    "README-ZETA.md",
+    "CHANGELOG-ZETA.md",
+    "docs/**/*.md",
+    "skills/oracle/SKILL.md",
     "LICENSE"
   ],
   "type": "module",
   "main": "dist/bin/oracle-cli.js",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/",
+    "tag": "latest"
+  },
   "scripts": {
+    "version:zeta": "npm version prerelease --preid=zeta --no-git-tag-version",
     "docs:list": "tsx scripts/docs-list.ts",
     "docs:check": "node --no-deprecation --import tsx bin/oracle-cli.ts docs check",
     "docs:site": "node scripts/build-docs-site.mjs",

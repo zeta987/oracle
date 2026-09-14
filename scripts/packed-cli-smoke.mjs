@@ -1,10 +1,29 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
 
 const repoRoot = process.cwd();
-const tmpRoot = mkdtempSync(join(tmpdir(), "oracle-packed-cli-"));
+const { name: packageName, version: packageVersion } = JSON.parse(
+  readFileSync(join(repoRoot, "package.json"), "utf8"),
+);
+if (typeof packageName !== "string" || typeof packageVersion !== "string") {
+  throw new Error("package.json must contain a package name and version");
+}
+if (process.argv.length > 3) {
+  throw new Error("Usage: node scripts/packed-cli-smoke.mjs [prepared-archive.tgz]");
+}
+const tempParent = realpathSync(tmpdir());
+const tmpRoot = mkdtempSync(join(tempParent, "oracle-packed-cli-"));
 
 function run(command, args, options = {}) {
   return execFileSync(command, args, {
@@ -14,28 +33,66 @@ function run(command, args, options = {}) {
   });
 }
 
+function runNpm(args, options = {}) {
+  if (process.platform !== "win32") {
+    return run("npm", args, options);
+  }
+
+  const searchDirs = [...(process.env.PATH ?? "").split(delimiter), dirname(process.execPath)];
+  const candidates = [
+    process.env.npm_execpath,
+    ...searchDirs
+      .filter(Boolean)
+      .map((directory) => join(directory, "node_modules", "npm", "bin", "npm-cli.js")),
+  ];
+  const npmCli = candidates.find(
+    (candidate) =>
+      candidate && basename(candidate).toLowerCase() === "npm-cli.js" && existsSync(candidate),
+  );
+  if (!npmCli) {
+    throw new Error("Could not locate npm-cli.js for the current Node installation");
+  }
+  return run(process.execPath, [npmCli, ...args], options);
+}
+
 try {
-  run("pnpm", ["pack", "--pack-destination", tmpRoot]);
-  const tarball = readdirSync(tmpRoot).find((entry) => entry.endsWith(".tgz"));
-  if (!tarball) {
-    throw new Error("pnpm pack did not produce a .tgz file");
+  let archivePath;
+  if (process.argv[2]) {
+    archivePath = realpathSync(resolve(repoRoot, process.argv[2]));
+    if (!archivePath.endsWith(".tgz")) {
+      throw new Error("Prepared archive must be a .tgz file");
+    }
+  } else {
+    runNpm(["pack", "--ignore-scripts", "--pack-destination", tmpRoot]);
+    const tarball = readdirSync(tmpRoot).find((entry) => entry.endsWith(".tgz"));
+    if (!tarball) {
+      throw new Error("npm pack did not produce a .tgz file");
+    }
+    archivePath = join(tmpRoot, tarball);
+  }
+  const archivePackage = JSON.parse(run("tar", ["-xOzf", archivePath, "package/package.json"]));
+  if (archivePackage.name !== packageName || archivePackage.version !== packageVersion) {
+    throw new Error(
+      `Archive contains ${archivePackage.name}@${archivePackage.version}; expected ${packageName}@${packageVersion}`,
+    );
   }
 
   const installDir = join(tmpRoot, "install");
   mkdirSync(installDir);
-  run("npm", ["init", "-y"], { cwd: installDir });
-  run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", join(tmpRoot, tarball)], {
+  writeFileSync(join(installDir, "package.json"), '{"private":true}\n');
+  runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund", archivePath], {
     cwd: installDir,
   });
-  const cliPath = join(
-    installDir,
-    "node_modules",
-    "@steipete",
-    "oracle",
-    "dist",
-    "bin",
-    "oracle-cli.js",
-  );
+  const packageDir = join(installDir, "node_modules", ...packageName.split("/"));
+  const cliPath = join(packageDir, "dist", "bin", "oracle-cli.js");
+  const skillPath = join(packageDir, "skills", "oracle", "SKILL.md");
+  if (!existsSync(skillPath)) {
+    throw new Error("packed package is missing skills/oracle/SKILL.md");
+  }
+  const version = run(process.execPath, [cliPath, "--version"], { cwd: installDir }).trim();
+  if (version !== packageVersion) {
+    throw new Error(`packed CLI reports version ${version}; expected ${packageVersion}`);
+  }
   const help = run(process.execPath, [cliPath, "--help", "--verbose"], { cwd: installDir });
 
   for (const expected of [
@@ -52,5 +109,14 @@ try {
   }
   console.log("Packed CLI help smoke: ok");
 } finally {
-  rmSync(tmpRoot, { recursive: true, force: true });
+  const cleanupTarget = realpathSync(tmpRoot);
+  if (
+    dirname(cleanupTarget) !== tempParent ||
+    !basename(cleanupTarget).startsWith("oracle-packed-cli-")
+  ) {
+    console.error(`Refusing to remove unexpected temporary path: ${cleanupTarget}`);
+    process.exitCode = 1;
+  } else {
+    rmSync(cleanupTarget, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  }
 }

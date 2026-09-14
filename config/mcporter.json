@@ -25,7 +25,7 @@
     },
     "oracle": {
       "command": "npx",
-      "args": ["-y", "@steipete/oracle", "oracle-mcp"],
+      "args": ["--yes", "--package", "@zeta987/oracle", "oracle-mcp"],
       "root": ".."
     },
     "oracle-local": {

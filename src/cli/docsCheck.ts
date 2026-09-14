@@ -167,7 +167,9 @@ function extractOracleCommandPath(line: string): string | undefined {
   const tokens = trimmed.split(/\s+/);
   let oracleIndex = tokens[0] === "oracle" ? 0 : -1;
   if (oracleIndex === -1) {
-    oracleIndex = tokens.findIndex((token) => token === "@steipete/oracle");
+    oracleIndex = tokens.findIndex((token) =>
+      /^@(steipete|zeta987)\/oracle(?:@[^\s]+)?$/.test(token),
+    );
   }
   if (oracleIndex === -1) {
     return undefined;

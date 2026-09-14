@@ -348,6 +348,102 @@ describe("tabLeaseRegistry", { timeout: process.platform === "win32" ? 30_000 : 
     }
   });
 
+  test("retries an ENOTEMPTY registry lock-directory removal", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "oracle-tab-leases-unlock-notempty-"));
+    const lockDir = path.join(dir, "oracle-tab-leases.lock");
+    try {
+      await mkdir(lockDir);
+      await writeFile(
+        path.join(lockDir, "owner.json"),
+        JSON.stringify({ id: "notempty-owner", pid: process.pid }),
+      );
+      let removeAttempts = 0;
+      await expect(
+        removeRegistryLockIfOwnedForTest(lockDir, "notempty-owner", {
+          removeImpl: async (target, options) => {
+            removeAttempts += 1;
+            if (removeAttempts === 1) {
+              throw Object.assign(new Error("directory temporarily not empty"), {
+                code: "ENOTEMPTY",
+              });
+            }
+            await rm(target, options);
+          },
+        }),
+      ).resolves.toBe(true);
+      expect(removeAttempts).toBe(2);
+      await expect(readFile(path.join(lockDir, "owner.json"), "utf8")).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("retries ENOTEMPTY after partial removal of its own owner file", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "oracle-tab-leases-unlock-partial-"));
+    const lockDir = path.join(dir, "oracle-tab-leases.lock");
+    try {
+      await mkdir(lockDir);
+      await writeFile(
+        path.join(lockDir, "owner.json"),
+        JSON.stringify({ id: "partial-owner", pid: process.pid }),
+      );
+      await writeFile(path.join(lockDir, "leftover.tmp"), "still here");
+      let removeAttempts = 0;
+      await expect(
+        removeRegistryLockIfOwnedForTest(lockDir, "partial-owner", {
+          removeImpl: async (target, options) => {
+            removeAttempts += 1;
+            if (removeAttempts === 1) {
+              await rm(path.join(target, "owner.json"));
+              throw Object.assign(new Error("directory temporarily not empty"), {
+                code: "ENOTEMPTY",
+              });
+            }
+            await rm(target, options);
+          },
+        }),
+      ).resolves.toBe(true);
+      expect(removeAttempts).toBe(2);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("preserves a replacement registry lock after ENOTEMPTY", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "oracle-tab-leases-unlock-replaced-"));
+    const lockDir = path.join(dir, "oracle-tab-leases.lock");
+    try {
+      await mkdir(lockDir);
+      await writeFile(
+        path.join(lockDir, "owner.json"),
+        JSON.stringify({ id: "original-owner", pid: process.pid }),
+      );
+      let removeAttempts = 0;
+      await expect(
+        removeRegistryLockIfOwnedForTest(lockDir, "original-owner", {
+          removeImpl: async (target, options) => {
+            removeAttempts += 1;
+            await rm(target, options);
+            await mkdir(target);
+            await writeFile(
+              path.join(target, "owner.json"),
+              JSON.stringify({ id: "replacement-owner", pid: process.pid }),
+            );
+            throw Object.assign(new Error("old directory not empty"), { code: "ENOTEMPTY" });
+          },
+        }),
+      ).rejects.toThrow(/changed owners|replaced/i);
+      expect(removeAttempts).toBe(1);
+      await expect(readFile(path.join(lockDir, "owner.json"), "utf8")).resolves.toContain(
+        "replacement-owner",
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   test("propagates exhausted registry lock-directory removal retries", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "oracle-tab-leases-unlock-exhausted-"));
     const lockDir = path.join(dir, "oracle-tab-leases.lock");

@@ -8,10 +8,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 RUNNER="${MCP_RUNNER:-./runner}"
-VERSION="${VERSION:-$(node -p "require('./package.json').version")}"
+PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+VERSION="${VERSION:-$PACKAGE_VERSION}"
+PACKAGE_NAME="$(node -p "require('./package.json').name")"
 ARTIFACT_DIR="${ARTIFACT_DIR:-$ROOT_DIR/.release-artifacts}"
+CHANGELOG_FILE="${CHANGELOG_FILE:-CHANGELOG-ZETA.md}"
 TGZ="oracle-${VERSION}.tgz"
-REPO="${REPO:-steipete/oracle}"
+REPO="${REPO:-zeta987/oracle}"
 
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
   echo "Invalid VERSION: expected a version such as 0.18.1 or 0.18.1-beta.1." >&2
@@ -49,15 +52,16 @@ phase_artifacts() (
     const path = require("node:path");
     // npm <= 11 prints an array; npm >= 12 prints an object keyed by package name.
     const parsed = JSON.parse(fs.readFileSync(0, "utf8"));
-    const pack = Array.isArray(parsed) ? parsed[0] : parsed["@steipete/oracle"];
-    if (pack?.name !== "@steipete/oracle" || pack?.version !== process.argv[1]) {
-      throw new Error(`Unexpected npm pack metadata: ${pack?.name}@${pack?.version}; expected @steipete/oracle@${process.argv[1]}`);
+    const packageName = process.argv[2];
+    const pack = Array.isArray(parsed) ? parsed[0] : parsed[packageName];
+    if (pack?.name !== packageName || pack?.version !== process.argv[1]) {
+      throw new Error(`Unexpected npm pack metadata: ${pack?.name}@${pack?.version}; expected ${packageName}@${process.argv[1]}`);
     }
     if (typeof pack.filename !== "string" || !pack.filename.endsWith(".tgz") || path.basename(pack.filename) !== pack.filename) {
       throw new Error("npm pack did not return a tarball basename");
     }
     process.stdout.write(pack.filename);
-  ' "$VERSION")
+  ' "$VERSION" "$PACKAGE_NAME")
 
   mkdir -p "$ARTIFACT_DIR"
   rm -f "$ARTIFACT_DIR/$TGZ"*
@@ -70,22 +74,44 @@ phase_artifacts() (
 
 phase_publish() {
   banner "Publish to npm"
-  run "$RUNNER" pnpm publish --tag latest --access public
-  run "$RUNNER" npm view @steipete/oracle version
-  run "$RUNNER" npm view @steipete/oracle time
+  [[ "$VERSION" == "$PACKAGE_VERSION" ]] || { echo "VERSION $VERSION differs from package.json version $PACKAGE_VERSION" >&2; exit 1; }
+  [[ -f "$ARTIFACT_DIR/$TGZ" ]] || { echo "Missing tested artifact: $ARTIFACT_DIR/$TGZ" >&2; exit 1; }
+  [[ -f "$ARTIFACT_DIR/$TGZ.sha256" ]] || { echo "Missing checksum: $ARTIFACT_DIR/$TGZ.sha256" >&2; exit 1; }
+  # shellcheck disable=SC2016 # Template literals must expand in JavaScript, not Bash.
+  node -e '
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const { createHash } = require("node:crypto");
+    const archive = process.argv[1];
+    const checksumFile = process.argv[2];
+    const stored = fs.readFileSync(checksumFile, "utf8").trimEnd();
+    const match = /^([a-fA-F0-9]{64})  ([^\r\n]+)$/.exec(stored);
+    if (!match || match[2] !== path.basename(archive)) {
+      throw new Error(`Invalid checksum for ${path.basename(archive)} in ${checksumFile}`);
+    }
+    const actual = createHash("sha256").update(fs.readFileSync(archive)).digest("hex");
+    if (actual !== match[1].toLowerCase()) {
+      throw new Error(`SHA-256 mismatch for ${archive}`);
+    }
+    console.log(`Prepared SHA-256: ${actual}`);
+  ' "$ARTIFACT_DIR/$TGZ" "$ARTIFACT_DIR/$TGZ.sha256"
+  run node "$ROOT_DIR/scripts/packed-cli-smoke.mjs" "$ARTIFACT_DIR/$TGZ"
+  run "$RUNNER" npm publish "$ARTIFACT_DIR/$TGZ" --tag latest --access public --ignore-scripts
+  run "$RUNNER" npm view "$PACKAGE_NAME@$VERSION" version
+  run "$RUNNER" npm view "$PACKAGE_NAME" time
 }
 
 phase_smoke() {
   banner "Smoke test in empty dir"
   local tmp=/tmp/oracle-empty
   rm -rf "$tmp" && mkdir -p "$tmp"
-  ( cd "$tmp" && npx -y @steipete/oracle@"$VERSION" "Smoke from empty dir" --dry-run )
+  ( cd "$tmp" && npx -y "$PACKAGE_NAME@$VERSION" "Smoke from empty dir" --dry-run )
 }
 
 phase_tag() {
   banner "Tag and push"
-  git tag "v${VERSION}"
-  git push --tags
+  git tag -s "v${VERSION}" -m "Release ${VERSION}"
+  git push origin "v${VERSION}"
 }
 
 extract_release_notes() {
@@ -93,18 +119,19 @@ extract_release_notes() {
   node -e '
     const fs = require("node:fs");
     const version = process.argv[1];
-    const lines = fs.readFileSync("CHANGELOG.md", "utf8").split(/\r?\n/);
+    const changelogFile = process.argv[2];
+    const lines = fs.readFileSync(changelogFile, "utf8").split(/\r?\n/);
     const heading = `## ${version}`;
     const start = lines.findIndex((line) => line === heading || line.startsWith(`${heading} `));
-    if (start < 0) throw new Error(`Missing CHANGELOG.md section for ${version}`);
+    if (start < 0) throw new Error(`Missing ${changelogFile} section for ${version}`);
     let end = start + 1;
     while (end < lines.length && !lines[end].startsWith("## ")) end++;
     const body = lines.slice(start + 1, end);
     while (body.length && !body[0].trim()) body.shift();
     while (body.length && !body[body.length - 1].trim()) body.pop();
-    if (!body.length) throw new Error(`Empty CHANGELOG.md section for ${version}`);
+    if (!body.length) throw new Error(`Empty ${changelogFile} section for ${version}`);
     process.stdout.write(`${body.join("\n")}\n`);
-  ' "$VERSION"
+  ' "$VERSION" "$CHANGELOG_FILE"
 }
 
 phase_github_release() (
@@ -199,17 +226,18 @@ Usage: scripts/release.sh [phase]
 Phases (run individually or all):
   gates          pnpm check, lint, test, build
   artifacts      npm pack + sha1/sha256 in ARTIFACT_DIR
-  publish        pnpm publish --tag latest --access public, verify npm view
-  smoke          empty-dir npx @steipete/oracle@<version> --dry-run
-  tag            git tag v<version> && push tags
-  github-release upload/verify assets, publish GitHub Release (triggers Homebrew tap), verify public URL
+  publish        verify checksum and packed CLI, then publish that tarball to latest
+  smoke          empty-dir npx <package-name>@<version> --dry-run
+  tag            create a signed v<version> tag and push it to origin
+  github-release upload/verify assets, publish GitHub Release, verify public URL
   all            gates, artifacts, publish, smoke, tag, github-release
 
 Environment:
   MCP_RUNNER (default ./runner) - guardrail wrapper
   VERSION    (default from package.json)
   ARTIFACT_DIR (default .release-artifacts/ under the repo root)
-  REPO       (default steipete/oracle) - GitHub release repository
+  CHANGELOG_FILE (default CHANGELOG-ZETA.md) - GitHub release notes
+  REPO       (default zeta987/oracle) - GitHub release repository
 EOF
 }
 

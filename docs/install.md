@@ -1,69 +1,63 @@
 ---
 title: Install
-description: "Install Oracle via Homebrew, npm, or run on demand with npx. Node 24+ required."
+description: "Install the prebuilt @zeta987/oracle fork from npm. Node 24+ required."
 ---
 
-## Homebrew (macOS / Linux)
+## Install the Zeta fork
 
 ```bash
-brew install steipete/tap/oracle
-```
-
-The tap also publishes the `oracle-notifier` macOS helper used by long-running browser runs.
-
-## npm / pnpm
-
-```bash
-npm install -g @steipete/oracle
-# or
-pnpm add -g @steipete/oracle
-```
-
-Requires Node **24 or newer**. After install:
-
-```bash
-oracle --help
+npm install -g @zeta987/oracle
 oracle --version
 ```
+
+Requires Node.js 24 or newer. The npm package includes built JavaScript; users do not need Git, pnpm, or a local source build. Keep browser authentication and personal configuration local to each computer.
+
+If the upstream package or its development link owns the same commands, migrate once:
+
+```bash
+npm uninstall -g @steipete/oracle
+npm install -g @zeta987/oracle
+```
+
+This does not remove the source checkout behind an old npm link or your `~/.oracle` state.
+
+## Update
+
+```bash
+npm update -g @zeta987/oracle
+# Or update all global packages:
+npm update -g
+oracle --version
+npm view @zeta987/oracle version
+```
+
+Releases use `<upstream-version>-zeta.<revision>`, such as `0.20.3-zeta.1`, and are deliberately published to this package's `latest` tag. A GitHub commit alone is not an npm release.
 
 ## Run without installing
 
 ```bash
-npx -y @steipete/oracle --help
-pnpx @steipete/oracle --help
+npx -y @zeta987/oracle --help
+# Pin a specific published fork release:
+npx -y @zeta987/oracle@0.20.3-zeta.1 --version
 ```
 
-`npx` is fine for CI, ad-hoc scripts, or when you don't want a global binary on the box. Cache the package in CI by pinning the version (`@steipete/oracle@0.12.1`) so you don't re-download on every job.
+## Browser and API setup
 
-## API keys (optional)
+Use your own signed-in Chrome-compatible browser for ChatGPT automation. See [Browser Mode](browser-mode.md) for manual login and attach-running setup. API use is optional and requires your own configured provider.
 
-API mode is opt-in and reads keys from the environment. Set whichever providers you'll use:
+The package includes `skills/oracle/SKILL.md`; install it separately into the host's actual skill directory. `npm root -g` locates the global package root. Installing or updating the CLI does not overwrite personal skills or settings.
 
-| Provider     | Env var                                                           | Models                                                  |
-| ------------ | ----------------------------------------------------------------- | ------------------------------------------------------- |
-| OpenAI       | `OPENAI_API_KEY`                                                  | GPT-5.x, GPT-5.x Pro, GPT-5.1 Codex                     |
-| Azure OpenAI | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `..._DEPLOYMENT` | Same models, hosted on Azure                            |
-| Google       | `GEMINI_API_KEY`                                                  | Gemini 3.1 Pro, Gemini 3.5 Flash, Gemini 3.1 Flash-Lite |
-| Anthropic    | `ANTHROPIC_API_KEY`                                               | Claude Sonnet 4.6, Claude Opus 4.1                      |
-| OpenRouter   | `OPENROUTER_API_KEY`                                              | Any OpenRouter id (e.g. `minimax/minimax-m2`)           |
+## State paths
 
-If no key is set, Oracle defaults to **browser mode** and drives ChatGPT directly — see [Browser Mode](browser-mode.md) for the manual-login flow.
+| Path                       | Contents                                              |
+| -------------------------- | ----------------------------------------------------- |
+| `~/.oracle/config.json`    | Defaults in JSON5                                     |
+| `~/.oracle/sessions/<id>/` | Run logs, bundles, transcripts and selection evidence |
 
-## Where Oracle stores state
+Override the state root with `ORACLE_HOME_DIR`. See [Configuration](configuration.md) for supported fields.
 
-| Path                       | Contents                                                 |
-| -------------------------- | -------------------------------------------------------- |
-| `~/.oracle/config.json`    | Defaults (JSON5). See [Configuration](configuration.md). |
-| `~/.oracle/sessions/<id>/` | Run logs, bundles, transcripts, generated artifacts      |
-| `~/.oracle/cookies.json`   | (Optional) inline ChatGPT cookies for browser mode       |
+## Source development and migration details
 
-Override the root with `ORACLE_HOME_DIR=/some/path` if you'd rather keep state under XDG config or per-project.
+See [the fork guide](../README-ZETA.md) for clone/link development, command-path checks, revision increments, and text-paste fallback.
 
-## Updating
-
-```bash
-brew upgrade oracle      # Homebrew
-npm update -g @steipete/oracle
-```
-
-`oracle --version` reports the current build. Releases land on [GitHub Releases](https://github.com/steipete/oracle/releases) with notes copied from the [changelog](https://github.com/steipete/oracle/blob/main/CHANGELOG.md).
+The original project's Homebrew distribution installs the upstream Oracle, not this scoped npm fork. Upstream history and attribution remain available at [steipete/oracle](https://github.com/steipete/oracle).

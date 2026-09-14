@@ -14,6 +14,10 @@ Read this file whenever you're working from Windows and add new findings so the 
 
 Future Windows gotchas belong here. Update this doc when you learn something new.
 
+- The synthetic serve-routing proof's Windows clients can take roughly 17–20 seconds while completing process-identity checks and cleanup. Keep a 60-second per-client budget and a 300-second overall Windows test budget; retain the same endpoint-refusal and connection-count assertions.
+
+- The packed CLI smoke invokes `npm-cli.js` through Node on Windows instead of executing a `.cmd` shim with `execFileSync`. Resolve the installed package directory from `package.json.name`, and validate its version and bundled skill before publishing a scoped fork.
+
 - Traditional Chinese ChatGPT can label Astra's advanced-model radio `最新的`. Match that complete label in both selection and post-selection verification; accepting `最新` alone misses this UI, while substring matching can falsely accept unrelated labels. Browser `xhigh` normalizes to `extra-high`; use it with `gpt-5.6-sol`, and use `gpt-6-pro` with Pro effort.
 
 - Tab-lease tests run real PowerShell process-identity probes (up to five seconds each). Their Windows test budget must cover multiple probes and registry cleanup. Failed self-identity probes are retried on the next lookup; only a successful identity is cached for the controller lifetime.

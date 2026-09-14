@@ -1,44 +1,42 @@
-# oracle 🧿 — Bring a second brain, not a second briefing
+# Oracle 🧿 — Zeta fork
 
 <p align="center">
   <img src="./README-header.png" alt="Oracle CLI header banner" width="1100">
 </p>
 
 <p align="center">
-  <a href="https://github.com/steipete/oracle/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/steipete/oracle/ci.yml?branch=main&style=flat-square&label=ci" alt="CI status"></a>
-  <a href="https://www.npmjs.com/package/@steipete/oracle"><img src="https://img.shields.io/npm/v/@steipete/oracle?style=flat-square" alt="npm version"></a>
-  <a href="https://nodejs.org/"><img src="https://img.shields.io/node/v/@steipete/oracle?style=flat-square" alt="Node.js version"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/steipete/oracle?style=flat-square" alt="License"></a>
-  <a href="https://github.com/steipete/homebrew-tap/blob/main/Formula/oracle.rb"><img src="https://img.shields.io/badge/homebrew-steipete%2Ftap-orange?style=flat-square" alt="Homebrew tap"></a>
+  <a href="https://github.com/zeta987/oracle/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/zeta987/oracle/ci.yml?branch=main&style=flat-square&label=ci" alt="CI status"></a>
+  <a href="https://www.npmjs.com/package/@zeta987/oracle"><img src="https://img.shields.io/npm/v/@zeta987/oracle?style=flat-square" alt="npm version"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/node/v/@zeta987/oracle?style=flat-square" alt="Node.js version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/zeta987/oracle?style=flat-square" alt="License"></a>
 </p>
 
 Oracle is a CLI and MCP server that bundles a prompt with the files you select, sends that context to an AI model through an API or a signed-in browser, and stores the result as a session. It is for developers and coding agents that need a second-model review grounded in the actual project.
 
-> **zeta987 fork:** For `clone + npm link` installation, updates, and verification of the active CLI build, see [繁體中文操作說明](README-ZETA.md).
+> **zeta987 fork:** For npm installation, migration from `npm link`, updates, and version checks, see [繁體中文操作說明](README-ZETA.md).
 
-Full documentation is at [askoracle.sh](https://askoracle.sh).
+This fork is based on [steipete/oracle](https://github.com/steipete/oracle), with upstream attribution and the MIT license preserved. Fork releases use `<upstream-version>-zeta.<revision>`; see [Zeta release notes](CHANGELOG-ZETA.md).
 
 ## Install
 
-With Homebrew on macOS or Linux:
+Requires Node.js 24 or newer. Install the published, prebuilt fork:
 
 ```bash
-brew install steipete/tap/oracle
+npm install -g @zeta987/oracle
+oracle --version
 ```
 
-Or install the npm package globally:
+Update it with `npm update -g @zeta987/oracle`, or use `npm update -g` alongside your other global packages. Users do not need Git, pnpm, or a source build.
+
+If an upstream `@steipete/oracle` installation or local link already owns the same `oracle` / `oracle-mcp` commands, remove that package once before installing this fork. See [migration and configuration](README-ZETA.md).
+
+For a one-off invocation:
 
 ```bash
-npm install -g @steipete/oracle
+npx -y @zeta987/oracle --help
 ```
 
-Oracle requires Node.js 24 or newer. To try it without installing:
-
-```bash
-npx -y @steipete/oracle --help
-```
-
-See the [installation guide](docs/install.md) for pnpm, updates, API keys, and storage paths.
+See the [installation guide](docs/install.md) for updates, browser setup, skills, and storage paths.
 
 ## Quick start
 

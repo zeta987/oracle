@@ -97,6 +97,31 @@ describe("docs check", () => {
     expect(result.issues).toEqual([{ file: "flags.md", flag: "--json", command: "oracle status" }]);
   });
 
+  test.each(["@steipete/oracle", "@zeta987/oracle", "@zeta987/oracle@0.20.3-zeta.1"])(
+    "checks npx %s command examples against the matching subcommand",
+    async (packageName) => {
+      const tmp = await mkdtemp(path.join(os.tmpdir(), "oracle-docs-check-"));
+      try {
+        await writeFile(
+          path.join(tmp, "flags.md"),
+          `npx -y ${packageName} status --json\n`,
+          "utf8",
+        );
+        const program = new Command();
+        program.command("doctor").option("--json");
+        program.command("status").option("--hours <hours>");
+
+        const result = await checkDocsFlags({ command: program, cwd: tmp, paths: ["flags.md"] });
+
+        expect(result.issues).toEqual([
+          { file: "flags.md", flag: "--json", command: "oracle status" },
+        ]);
+      } finally {
+        await rm(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
   test(
     "honors custom docs path from the CLI",
     async () => {

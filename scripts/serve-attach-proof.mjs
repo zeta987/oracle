@@ -28,6 +28,9 @@ cp.spawn=function(command,...args){
 };syncBuiltinESMExports();`,
 );
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Windows process-identity checks launch bounded PowerShell probes. A correctly
+// routed client can approach the old 20-second fixture deadline before cleanup.
+const clientTimeoutMs = process.platform === "win32" ? 60_000 : 20_000;
 
 async function prove(mode) {
   const home = path.join(root, mode);
@@ -188,7 +191,7 @@ async function prove(mode) {
       output += chunk;
     });
     clientDone = new Promise((resolve) => client.on("exit", resolve));
-    const timeout = setTimeout(() => client.kill("SIGKILL"), 20_000);
+    const timeout = setTimeout(() => client.kill("SIGKILL"), clientTimeoutMs);
     const code = await clientDone;
     clearTimeout(timeout);
     assert.equal(code, 1, `${mode}: expected synthetic endpoint refusal`);
@@ -223,7 +226,7 @@ async function prove(mode) {
       retry.stderr.on("data", (chunk) => {
         retryOutput += chunk;
       });
-      const retryTimeout = setTimeout(() => retry.kill("SIGKILL"), 20_000);
+      const retryTimeout = setTimeout(() => retry.kill("SIGKILL"), clientTimeoutMs);
       const retryCode = await new Promise((resolve) => retry.on("exit", resolve));
       clearTimeout(retryTimeout);
       assert.equal(retryCode, 1, `${mode}: expected second synthetic refusal`);

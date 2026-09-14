@@ -6,7 +6,7 @@ description: "Oracle bundles your prompt and files so a mythical pro agent — G
 
 ## Try it
 
-After installing (`brew install steipete/tap/oracle` or `npm i -g @steipete/oracle`), every consult is a one-liner.
+After installing (`brew install steipete/tap/oracle` or `npm i -g @zeta987/oracle`), every consult is a one-liner.
 
 ```bash
 # Browser path — no API key, drives ChatGPT directly (default: GPT-5.5 Pro).

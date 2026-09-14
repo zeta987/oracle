@@ -1,163 +1,141 @@
-# zeta987 Oracle：安裝、更新與確認版本
+# Zeta Oracle：npm 安裝、更新與發佈
 
-這份說明適用於 [zeta987/oracle](https://github.com/zeta987/oracle) 的本機原始碼安裝，指令以 **Windows PowerShell 7** 為例。
+這是 [zeta987/oracle](https://github.com/zeta987/oracle) 的操作說明。一般使用者安裝 **`@zeta987/oracle`**；`oracle` 與 `oracle-mcp` 指令名稱保持不變。
 
-使用方式是 **clone → 安裝相依套件 → build → npm link**。`oracle` 指令會透過 npm 的全域連結執行這個 repo 的 `dist` 建置成品。
+## 1. 一般使用者安裝
 
-## 1. 第一次安裝
-
-先安裝 Git、Node.js 24 或 26。pnpm 版本以 `package.json` 的 `packageManager` 為準；以下版本是本次驗證使用的 `11.26.0`。
-
-在準備放置 repo 的目錄逐行執行；任一步驟失敗時先停止，不要繼續 link 不完整的建置：
+先準備 Node.js 24 或更新的相容版本；本專案開發驗證使用 Node 24／26。安裝包已包含編譯後的 JavaScript，一般使用者不用 clone、安裝 pnpm 或手動 build。
 
 ```powershell
-npm install -g pnpm@11.26.0
-git clone --branch main --single-branch https://github.com/zeta987/oracle.git
-Set-Location oracle
-pnpm install --frozen-lockfile --ignore-scripts
-pnpm run build
-npm link --ignore-scripts
+npm install -g @zeta987/oracle
 oracle --version
 ```
 
-`--ignore-scripts` 讓安裝相依套件與建置分開；上一個步驟已明確執行 `pnpm run build`，所以 link 時不必再跑一次 `prepare`。
+第一版為 `0.20.3-zeta.1`。npm 帳號與 GitHub 帳號的 scope 是不同的權限；本套件由 npm 帳號 `zeta987` 發佈。
 
-不用先解除安裝同名的官方版本，也不需要 `--force`。在 npm 12.0.2 的 Windows 隔離實測中，`npm link` 可將同名的一般安裝替換成指向 repo 的 Junction。
+## 2. 從官方版或 clone + link 遷移
 
-**保留 repo 的位置、`node_modules` 與 `dist`。** 移動 repo 後需要從新位置重新執行 `npm link --ignore-scripts`。
-
-## 2. 平常更新 CLI
-
-在這份 repo 的 `main` 分支執行：
+舊套件與新套件都提供 `oracle`／`oracle-mcp`，第一次遷移先移除舊套件或其連結，再安裝新套件：
 
 ```powershell
-git status --short
-git switch main
-git pull --ff-only
-pnpm install --frozen-lockfile --ignore-scripts
-pnpm run build
+npm uninstall -g @steipete/oracle
+npm install -g @zeta987/oracle
+oracle --version
+npm ls -g @zeta987/oracle --depth=0
 ```
 
-先確認沒有需要保留的未提交修改。若切換分支、拉取或建置失敗，先處理該錯誤；不要用 `reset --hard` 或強制拉取來略過。
+解除 npm link 不會刪除原本 clone 的 repo。個人的 `~/.oracle/config.json`、瀏覽器 profile 與 session 也不會因這個套件遷移而改寫。
 
-既有 npm 連結仍指向這個目錄，所以更新後通常**不用重新 link**。只有連結被其他安裝取代、npm prefix 改變，或 repo 移動時，才重新執行：
+不要使用 `--force` 解決不明的同名指令衝突；先用 `Get-Command oracle -All` 找出實際指令來源。
+
+## 3. 平常更新
 
 ```powershell
-npm link --ignore-scripts
+npm update -g @zeta987/oracle
+# 或連同其他全域套件一起更新
+npm update -g
+oracle --version
 ```
 
-`git pull` 只更新原始碼；**沒有重新 build，CLI 就仍可能執行舊的 `dist`**。
+更新來自 npm registry 的 `latest` 標籤。開發者只有 push GitHub commit、尚未發佈新版本時，npm 不會有新版本可下載。
 
-## 3. 從舊修補分支改用 main
-
-如果之前使用 `--branch fix/astra-zh-tw-picker --single-branch` clone，單純 `git fetch` 可能只更新該修補分支。合併後改成追蹤 fork 的 `main`：
+如果想明確安裝目前的最新發佈版：
 
 ```powershell
-git status --short
-git remote set-branches --add origin main
-git fetch origin
-git switch main
-git branch --set-upstream-to=origin/main main
-git pull --ff-only
-pnpm install --frozen-lockfile --ignore-scripts
-pnpm run build
+npm install -g @zeta987/oracle@latest
 ```
 
-一般 Git 設定會在 `git switch main` 時從唯一的 `origin/main` 建立本機分支。若沒有本機 `main`，且自動建立被停用，改用 `git switch -c main --track origin/main`；已有本機 `main` 時不要加 `-c`。
-
-## 4. 確認執行的真的是這份修正版
-
-不能只看 `oracle --version`。2026-09-14 的修補 commit 是 `7ea9505df340b4782d06520250a90792731f4c3d`，套件版本仍是 **0.20.3**，因此官方版與這份修正版可能印出相同版號。
-
-### A. 檢查命令與 npm 連結
+## 4. 確認版本與指令來源
 
 ```powershell
 Get-Command oracle -All
-Get-Command oracle.cmd -All
-Get-Content -LiteralPath (Get-Command oracle.cmd -ErrorAction Stop).Source
-$oracleNpmPrefix = (npm prefix -g).Trim()
-Get-Item -LiteralPath (Join-Path $oracleNpmPrefix 'node_modules/@steipete/oracle') -Force |
-  Format-List FullName, LinkType, Target
-npm ls -g @steipete/oracle --depth=0
-```
-
-預期結果：
-
-- `oracle` 的 npm shim 位於目前 `npm prefix -g` 顯示的目錄，內容指向該 prefix 下的 `node_modules/@steipete/oracle/dist/bin/oracle-cli.js`。
-- 套件的 `LinkType` 是 `Junction` 或 `SymbolicLink`，`Target` 指向你剛更新及 build 的 repo。
-- 如果 `Get-Command oracle -All` 的第一筆是同名 alias、function，或另一套 Node/npm 的舊路徑，先處理命令遮蔽；後面的正確連結不代表它會被執行。
-
-也可以明確呼叫這個 npm prefix 裡的 Windows shim：
-
-```powershell
-& (Join-Path $oracleNpmPrefix 'oracle.cmd') --version
-```
-
-### B. 檢查 Git commit 與 fork 的 main
-
-在連結所指向的 repo 裡執行：
-
-```powershell
-git remote -v
-git fetch origin
-git branch --show-current
-git log -1 --format='%h %s'
-git rev-list --left-right --count HEAD...origin/main
-```
-
-`origin` 應是 `https://github.com/zeta987/oracle.git`，目前分支應是 `main`。最後一行 **`0 0`** 表示本機 HEAD 與剛取得的 fork `main` 相同；其他數字代表仍有落後或額外 commit。
-
-若只想確認 2026-09-14 的修補已在歷史中：
-
-```powershell
-git merge-base --is-ancestor 7ea9505df340b4782d06520250a90792731f4c3d HEAD
-$oraclePatchExitCode = $LASTEXITCODE
-$oraclePatchExitCode
-```
-
-輸出 `0` 表示包含該修補。這是歷史檢查，不能取代最新 `origin/main` 與建置檢查。
-
-### C. 重新建置，排除舊 dist
-
-```powershell
-pnpm run build
-Select-String -LiteralPath './dist/src/browser/actions/modelSelection.js' -SimpleMatch '最新的'
 oracle --version
+npm ls -g @zeta987/oracle --depth=0
+npm view @zeta987/oracle version
 ```
 
-建置必須成功；本次修補的編譯成品應包含 `最新的` 精確比對。**正確的命令路徑＋正確的連結目標＋最新 commit＋成功 build**，才確認 CLI 使用了這份原始碼的成品。
+`oracle --version` 是目前執行的版本；`npm view` 是 registry 的 latest。兩者相同表示版本號一致，還要確認命令沒有被 alias、function 或其他 npm prefix 的舊程式遮蔽。
 
-## 5. 確認兩個網頁模型的指令
+`npm install -g @steipete/oracle` 仍代表原作者的套件，不是這份 fork。請分享帶有 `@zeta987` 的安裝指令。
 
-以下只預覽，不送出模型請求：
+## 5. 網頁模型與設定
+
+每台電腦使用自己的瀏覽器登入。可先預覽 CLI 解析結果，不會送出模型請求：
 
 ```powershell
 oracle --engine browser --model gpt-5.6-sol --browser-thinking-time xhigh --browser-model-strategy select --dry-run summary -p 'Reply only ORACLE_OK'
 oracle --engine browser --model gpt-6-pro --browser-thinking-time pro --browser-model-strategy select --dry-run summary -p 'Reply only ORACLE_OK'
 ```
 
-Sol 預覽目標應為 `GPT-5.6 Sol`；GPT-6 Pro 的選單目標是 `Latest`，繁中網頁可能顯示「最新的」。`xhigh` 是網頁 `extra-high`／「極高」的別名，不能拼成 `xihgh`。
+Sol 的 `xhigh` 會解析為 Extra High／「極高」；GPT-6 Pro 對應目前的 `Latest`／「最新的」與 Pro 強度。移除 dry-run 後才是實際請求，應檢查模型與思考強度的選取證據。
 
-預覽只證明 CLI 解析與路由，不能證明帳戶可用性。實際測試時移除 `--dry-run summary`，使用已登入的瀏覽器，並核對回報的模型與思考強度證據都有 `verified=yes`。GPT-6 Pro 必須確認 Pro 強度；不要使用 `current` 或 `ignore` 來代替指定模型的驗證。
+設定檔為 `~/.oracle/config.json`（JSON5），設定 `ORACLE_HOME_DIR` 時以該位置為準。例如：
 
-## 6. npm update 與 npm install 的差別
+```json
+{
+  "engine": "browser",
+  "model": "gpt-6-pro",
+  "browser": {
+    "modelStrategy": "select",
+    "thinkingTime": "pro",
+    "manualLogin": true
+  }
+}
+```
 
-| 操作                                          | 對這份 fork 的影響                                                                                         |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `npm update -g`                               | npm 12.0.2 實測保留本機連結；不執行 `git pull`，也不重新 build                                             |
-| `npm install -g @steipete/oracle`             | 安裝官方 registry 套件，會取代目前連結                                                                     |
-| `npm install -g 'github:zeta987/oracle#main'` | Git 來源安裝方式；仍需符合該 npm 版本的 Git 安裝政策及建置條件，後續一般 `npm update -g` 不會追蹤 Git 分支 |
-| 在 fork repo 執行 `npm link --ignore-scripts` | 把全域指令連回這份本機建置                                                                                 |
+已有可附掛的 Chrome 相容瀏覽器時，才依自己的環境使用 `browser.attachRunning`。保留及備份原本的個人設定，不要把另一台的憑證或 browser profile 當成安裝包的一部分。詳見 [Browser mode](docs/browser-mode.md)。
 
-若希望一般 `npm update -g` 自動取得自己的新版，必須另行發布自己的 npm 套件到 registry；GitHub push 本身不會發布 npm 版本。這份 fork 目前採用原始碼＋本機連結方式。
+## 6. Skill 與上傳備援
 
-## 7. Skill、設定與上傳備援
+npm 套件包含 `skills/oracle/SKILL.md`。它不會自動改寫 Codex、Claude Code 或 agy 的個人 skill 目錄；將該檔案安裝到宿主實際載入的位置。全域套件目錄可用 `npm root -g` 查詢，下面接 `@zeta987/oracle/skills/oracle/SKILL.md`。
 
-- repo 內的 skill 是 [`skills/oracle/SKILL.md`](skills/oracle/SKILL.md)，每台電腦需要另外安裝到宿主實際載入的目錄。`npm link` 不會自動安裝或更新 skill。
-- 個人設定通常位於 `~/.oracle/config.json`，有設定 `ORACLE_HOME_DIR` 時則以它為準。不要直接覆寫另一台已有的設定；先核對及備份。
-- 本次使用的預設為 `engine: "browser"`、`model: "gpt-6-pro"`、`browser.modelStrategy: "select"`、`browser.thinkingTime: "pro"`。要使用 Sol，明確傳入 `--browser-thinking-time xhigh` 覆寫 Pro 強度。
-- `browser.attachRunning: true` 需要該台電腦已有可附掛且已登入的 Chrome 相容瀏覽器。瀏覽器登入及遠端除錯允許狀態需在每台電腦各自處理，詳見 [Browser mode](docs/browser-mode.md)。
-- 真正測試文件上傳使用 `--browser-attachments always`；`auto` 可能直接把小型文字檔貼入提示。
-- 上傳失敗先檢查是否已送出。確認未送出後，文字／程式碼檔可改用 `--browser-attachments never` 貼入內容；已送出或狀態不明時先續接既有 session，避免重複請求。原始 PDF、圖片等二進位檔不能直接用這種文字備援。
+真正測試上傳使用 `--browser-attachments always`。`auto` 可能直接貼入小型文字檔。
 
-上傳與貼入的完整操作條件請看 [Oracle skill](skills/oracle/SKILL.md)。
+上傳失敗時先確認是否已送出；確認未送出後，文字／程式碼檔可改用 `--browser-attachments never`。已送出或狀態不明時先續接既有 session，避免重複請求。原始 PDF、圖片等二進位檔不能直接使用文字貼入備援。完整條件見 [Oracle skill](skills/oracle/SKILL.md)。
+
+## 7. 維護者的版本規則
+
+版本格式為 **`上游版本-zeta.修訂號`**：
+
+- 基於上游 0.20.3 的第一版：`0.20.3-zeta.1`
+- 下一次發佈修訂：`0.20.3-zeta.2`，再來是 `.3`
+- 改以新上游 0.20.4 為基底時：`0.20.4-zeta.1`
+
+每次準備發佈自己的新修訂時，在乾淨的 repo 執行：
+
+```powershell
+npm run version:zeta
+```
+
+這會修改版本號，不會自動 commit、tag 或 publish。不要在第一次 `0.20.3-zeta.1` 發佈前再執行一次，否則會進到 `.2`。
+
+升級上游基底時，明確設定：
+
+```powershell
+npm version 0.20.4-zeta.1 --no-git-tag-version
+```
+
+`-zeta.N` 在 SemVer 中屬於 prerelease；發佈時刻意使用 `--tag latest` 作為本 fork 的一般更新頻道。npm 12.0.2 隔離實測已確認 latest 從 `.1` 指向 `.2` 後，一般 `npm update -g` 可更新。不要改成 `+zeta.N`，build metadata 不提供相同的版本排序效果。
+
+每個已發佈的名稱與版本組合只能使用一次。發佈內容與檢查步驟見 [Zeta 發佈程序](docs/RELEASING.md)，修訂紀錄見 [CHANGELOG-ZETA.md](CHANGELOG-ZETA.md)。
+
+## 8. 開發者仍可使用 clone + link
+
+```powershell
+git clone --branch main --single-branch https://github.com/zeta987/oracle.git
+Set-Location oracle
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm run build
+npm link --ignore-scripts
+```
+
+這會把 `@zeta987/oracle` 連到本機 repo。保留 repo、`node_modules` 與 `dist`。之後更新原始碼：
+
+```powershell
+git status --short
+git pull --ff-only
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm run build
+```
+
+逐步執行，任一步驟失敗先停止。link 模式下，`npm update -g` 不會代替 `git pull` 或 build；要回到 registry 版，執行 `npm install -g @zeta987/oracle@latest`。

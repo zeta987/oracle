@@ -558,7 +558,13 @@ async function removeRegistryLockIfOwned(
     }
     return false;
   }
-  await removeRegistryLockDirectoryWithRetry(lockDir, options.removeImpl);
+  const expectedIdentity = await readRegistryLockIdentity(lockDir);
+  if (!expectedIdentity) {
+    throw new Error(
+      `Unable to verify directory identity while releasing Oracle tab lease registry lock ${lockDir}.`,
+    );
+  }
+  await removeRegistryLockDirectoryWithRetry(lockDir, lockId, expectedIdentity, options.removeImpl);
   return true;
 }
 
@@ -577,15 +583,36 @@ async function readRegistryLockOwnerWithRetry(
 
 async function removeRegistryLockDirectoryWithRetry(
   lockDir: string,
+  lockId: string,
+  expectedIdentity: RegistryLockIdentity,
   removeImpl: RegistryLockRemove = rm,
 ): Promise<void> {
   for (let attempt = 0; ; attempt += 1) {
+    if (!sameRegistryLockDirectory(await readRegistryLockIdentity(lockDir), expectedIdentity)) {
+      throw new Error(
+        `Oracle tab lease registry lock ${lockDir} was replaced before release; preserving it.`,
+      );
+    }
+    const owner = await readRegistryLockOwnerWithRetry(lockDir);
+    const ownerFileRemovedByPriorAttempt =
+      attempt > 0 && !owner && (await isRegistryOwnerFileMissing(lockDir));
+    if (owner?.id !== lockId && !ownerFileRemovedByPriorAttempt) {
+      throw new Error(
+        `Oracle tab lease registry lock ${lockDir} changed owners before release; preserving it.`,
+      );
+    }
+    if (!sameRegistryLockDirectory(await readRegistryLockIdentity(lockDir), expectedIdentity)) {
+      throw new Error(
+        `Oracle tab lease registry lock ${lockDir} was replaced before release; preserving it.`,
+      );
+    }
     try {
       await removeImpl(lockDir, { recursive: true, force: true });
       return;
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
-      const transient = code === "EPERM" || code === "EBUSY" || code === "EACCES";
+      const transient =
+        code === "EPERM" || code === "EBUSY" || code === "EACCES" || code === "ENOTEMPTY";
       if (!transient || attempt + 1 >= REGISTRY_RENAME_RETRY_ATTEMPTS) throw error;
       await delay(50 * (attempt + 1));
     }
