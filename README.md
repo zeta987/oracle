@@ -14,6 +14,8 @@
 
 Oracle is a CLI and MCP server that bundles a prompt with the files you select, sends that context to an AI model through an API or a signed-in browser, and stores the result as a session. It is for developers and coding agents that need a second-model review grounded in the actual project.
 
+> **zeta987 fork:** For `clone + npm link` installation, updates, and verification of the active CLI build, see [繁體中文操作說明](README-ZETA.md).
+
 Full documentation is at [askoracle.sh](https://askoracle.sh).
 
 ## Install
