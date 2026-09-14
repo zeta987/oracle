@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Browser: recognize the exact Traditional Chinese `最新的` model option when selecting and verifying GPT-6 Astra, while rejecting unrelated model labels. Update the Oracle skill with explicit GPT-5.6 Sol Extra High and GPT-6 Pro browser recipes, plus upload verification and a text-paste fallback that checks submission state before retrying.
+- Browser: refresh Markdown from the same assistant message when final response text grows, preserving code fences around uploaded-file answers while retaining late-content recovery.
+
 ## 0.20.3 - 2026-09-13
 
 **Highlights:** Gemini is selected consistently across CLI, MCP, and detached workers; cookie values are redacted from verbose logs.

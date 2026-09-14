@@ -1,207 +1,174 @@
 ---
 name: oracle
-description: "Oracle second-model review: bundle prompts/files, debug, refactor, design."
+description: Use the Oracle CLI for a second-model review with selected files, browser or API execution, and recoverable sessions. Apply to debugging, architecture review, refactoring, and cross-validation when Oracle is requested or authorized.
 ---
 
-# Oracle (CLI) — best use
+# Oracle consultations
 
-Oracle bundles a prompt and selected files into a one-shot request so another
-model can answer with real repository context through the API or browser. A
-prompt is required; attach files only when they add necessary context. Treat
-responses as advisory and verify them against the codebase and tests.
+Oracle sends a prompt and selected context to an advisory model. Check its answer
+against the repository and relevant tests before making changes. Follow the
+user's current instructions and existing external-consultation authorization;
+installing this skill does not authorize a new provider or a different task.
 
-## Main use case (browser, GPT-5.6)
+## Local installation and defaults
 
-Use browser mode with GPT-5.6 when the ChatGPT account exposes it. GPT-5.6 Sol
-and GPT-5.6 Sol Pro are distinct targets: base Sol uses the Extra High effort
-setting, while Pro is a separate picker target for difficult or long-running
-work.
+Use the installed `oracle` command (`Get-Command oracle -All` locates Windows
+shims). Do not switch to
+`npx @steipete/oracle` just to invoke it: the downloaded package can differ from
+the installed build. Check `oracle --version` and `oracle --help --verbose` on
+first use in an environment; inspect the actual implementation when help text
+lags supported options.
 
-Recommended defaults:
+For a locally maintained fork, build it and use `npm link --ignore-scripts`
+from its stable checkout when that installation change is requested. Keep the
+checkout, dependencies, and `dist` in place; rebuild after source changes.
+Ordinary `npm update -g` preserved this link in an isolated npm 12.0.2 check;
+an explicit registry installation can replace it. Do not switch an existing
+installation merely because this skill was loaded.
 
-- Engine: browser (`--engine browser`)
-- Base Sol: `--model gpt-5.6-sol`
-- Base Sol maximum reasoning: `--browser-thinking-time extra-high` (Extra High)
-- Explicit Pro effort on GPT-5.6 Sol: `--browser-thinking-time pro` (fails closed if Pro cannot be confirmed)
-- Browser GPT-5.5 with Pro effort: `--model gpt-5.5 --browser-thinking-time pro`
-- API Pro maximum reasoning: `--model gpt-5.6-sol --reasoning-mode pro --reasoning-effort max`
-- Fallback: explicitly use `--model gpt-5.5-pro` when GPT-5.6 is unavailable
-- Attachments: directories/globs plus excludes; never attach secrets by default
+The user configuration is `~/.oracle/config.json` (JSON5), unless
+`ORACLE_HOME_DIR` selects another home. Prefer an explicit model and effort for
+each consultation. The two browser recipes below select GPT-5.6 Sol Extra High
+or GPT-6 Pro (Astra), with explicit model selection. Preserve an explicit
+user request for another model, effort, or transport. Configuration and skills
+do not change the calling agent's model or permissions.
 
-GPT-5.6 availability is account-dependent. Confirm the base Sol picker and
-retain model-selection evidence. A bare `Pro` picker label proves picker
-selection but does not, by itself, prove the server-side Pro generation.
+Use the original signed-in Windows user's execution environment when browser
+attachment or session access requires it. Use the host's narrow approval
+mechanism when necessary; do not copy credentials or replace the user's home.
+Follow other hosts' normal permission mechanisms rather than copying Codex
+shell parameters into their commands.
 
-## GPT-5.6 model selection
+## Browser model and effort
 
-This version supports GPT-5.6 on both surfaces, but Pro selection differs:
+| Requested target               | Model argument        | Browser effort argument                                 |
+| ------------------------------ | --------------------- | ------------------------------------------------------- |
+| GPT-5.6 Sol xhigh / Extra High | `--model gpt-5.6-sol` | `--browser-thinking-time xhigh` (alias of `extra-high`) |
+| GPT-6 Pro (Astra)              | `--model gpt-6-pro`   | `--browser-thinking-time pro`                           |
 
-- `gpt-5.6`: follow the GPT-5.6 family default
-- `gpt-5.6-sol`: pin ChatGPT's `GPT-5.6 Sol` entry
-- Browser: `gpt-5-pro` selects ChatGPT's `Pro` target
-- API: `--reasoning-mode pro` enables Pro execution on `gpt-5.6-sol`; pair it with `--reasoning-effort max` for maximum reasoning
+Use these browser arguments, not API-only `--reasoning-effort`. The spelling is
+`xhigh`, not `xihgh`. Sol Extra High and Sol Pro are different tiers.
 
-For base Sol, use:
+### GPT-6 Astra selection
 
-```bash
-oracle --engine browser --browser-manual-login --model gpt-5.6-sol \
-  --browser-thinking-time extra-high \
-  -p "<task>" --file "src/**"
+Oracle's Astra-capable builds support these browser mappings:
+
+- `gpt-6-astra` selects the advanced picker's `Latest` / localized equivalent.
+- `gpt-6-pro` is a browser alias for the same model with Pro effort by default.
+- Use `--browser-thinking-time pro` with `gpt-6-astra` to request Pro explicitly.
+- Use `--browser-model-strategy select` when a particular model is required.
+  `current` retains the active model; `ignore` skips selection. Neither is proof
+  that the requested model was selected.
+
+Model and effort are separate. Look for verified model-selection evidence and
+verified thinking-selection evidence in the stored session. In the current UI,
+`Latest` / `最新的` together with the `6 Pro` composer pill is Astra Pro selection evidence;
+a generic `Pro` label or a `5.6 Pro` pill is insufficient. UI labels demonstrate
+selection, not independent attestation of the server-side model. `Latest` may
+change in future releases: recheck its generation when ChatGPT's lineup changes.
+
+If Astra or Pro cannot be selected, report the missing condition and use another
+route only when authorized. Do not silently downgrade or click ChatGPT's
+`Answer now` button. Let Pro finish, preserving the session for reattachment.
+
+Unpatched 0.20.3 builds can reject the Traditional Chinese `最新的` radio before
+submission. Use a build containing its exact-label selection and verification
+fix. Changing only the skill/config or using `current` is not that fix.
+
+## Preview, execute, recover
+
+1. Choose the smallest useful context. A connectivity check needs only a prompt;
+   code analysis needs the relevant files, constraints, and prior observations.
+2. Preview with the same model, effort, engine, and files as the real run.
+3. Execute once, record the printed session ID, and verify the returned evidence.
+4. After a detach or timeout, inspect that session before starting another run.
+
+PowerShell-compatible examples (replace the task and file selection):
+
+```powershell
+oracle --engine browser --model gpt-5.6-sol --browser-thinking-time xhigh --browser-model-strategy select --dry-run full --files-report --prompt "Review this module for correctness." --file "src/module/**"
+oracle --engine browser --model gpt-5.6-sol --browser-thinking-time xhigh --browser-model-strategy select --prompt "Review this module for correctness." --file "src/module/**"
+oracle --engine browser --model gpt-6-pro --browser-thinking-time pro --browser-model-strategy select --dry-run full --files-report --prompt "Review this module for correctness." --file "src/module/**"
+oracle --engine browser --model gpt-6-pro --browser-thinking-time pro --browser-model-strategy select --prompt "Review this module for correctness." --file "src/module/**"
+oracle status --hours 72
+oracle session <session-id> --render
 ```
 
-For GPT-5.6 Sol Pro through the Responses API, use:
+When the local config enables `browser.attachRunning`, Oracle opens a dedicated
+tab in the existing Chrome-compatible browser and does not need cookie copying.
+Allow the browser's remote-debugging prompt if it appears. Do not change browser
+profiles or synchronize cookies merely because attachment needs approval.
 
-```bash
-oracle --engine api --model gpt-5.6-sol \
-  --reasoning-mode pro \
-  --reasoning-effort max \
-  -p "<task>" --file "src/**"
+Use `--followup <session-id>` only when continuing that consultation is intended.
+To preserve a conversation for follow-up, set `--browser-archive never` when
+starting it; successful non-project one-shots otherwise archive automatically.
+Sessions live under `~/.oracle/sessions` unless `ORACLE_HOME_DIR` is set. Inspect
+`meta.json`, `output.log`, and available transcript artifacts without exposing
+credentials. Use a 3-to-5-word slug for a readable session ID. `--force` starts a
+new identical request; it is not a recovery mechanism.
+
+## Files and prompts
+
+Repeat `--file` for paths, directories, or globs; prefix exclusions with `!`.
+For example: `--file "src/**" --file "!src/**/*.test.ts"`. Globs honor
+`.gitignore`, do not follow symlinks, and need explicit dot segments for hidden
+paths. The default single-file limit is 1 MB; inspect `--files-report` or
+`--dry-run json` before expanding it. Model context limits and browser upload
+limits are separate; do not infer a browser payload budget from the API window.
+
+Do not attach credentials, private keys, or `.env` contents. Include the task,
+relevant stack and paths, exact failures, constraints, and desired answer format.
+Each fresh consultation starts without the calling agent's conversation history;
+explicit follow-ups use the saved conversation.
+
+### Uploads and text-paste fallback
+
+`--browser-attachments auto` usually pastes small text/source inputs directly
+into the composer; it is not proof of a file upload. To test actual upload, use
+`--browser-attachments always` and confirm upload readiness and that the answer
+uses information available only in the file. In `auto`, the current inline/upload
+decision uses approximately 60,000 composer characters, not an API token limit.
+
+If an upload fails or stays pending, inspect its existing session and browser
+state first. If the prompt was submitted or submission is uncertain, recover
+that conversation instead of resending it. Do not loop on the same failed upload.
+After a confirmed pre-submission upload failure, text/source inputs may use the
+already-authorized paste fallback while preserving the model, effort, task, and
+selected files:
+
+```powershell
+oracle --engine browser --model gpt-5.6-sol --browser-thinking-time xhigh --browser-model-strategy select --browser-attachments never --dry-run full --prompt "Review the selected files." --file "src/module/**"
+oracle --engine browser --model gpt-5.6-sol --browser-thinking-time xhigh --browser-model-strategy select --browser-attachments never --prompt "Review the selected files." --file "src/module/**"
 ```
 
-Do not use `--model "GPT-5.6 Sol Pro"`. Pro is intentionally handled as a
-browser picker target and an API reasoning mode. Browser label validation rejects unknown future
-variants such as `gpt-5.6-luna` instead of silently falling back to Sol; API
-runs preserve such provider model IDs unchanged.
+Remove forced bundling flags for this fallback. `never` makes Oracle paste the
+resolved text contents, including file labels, without using the OS clipboard.
+Preview the complete text before sending; reduce or deliberately split oversized
+context instead of truncating it. Raw PDF, Office, image, and other binary inputs
+cannot be pasted this way. Extract and verify the necessary text first when text
+alone satisfies the task; retain a real upload when layout or images matter.
 
-Browser mode maps these aliases to ChatGPT's Sol picker. API and multi-model
-runs preserve the corresponding first-party OpenAI model IDs; provider-qualified
-and unrelated custom IDs remain pass-through values.
+For manual handoff, use `oracle --render --prompt "..." --file "..."`.
+Add `--copy-markdown` only when clipboard replacement is wanted. Rendering creates
+a bundle, not a model answer or completed consultation.
 
-The GPT-5.6 browser support depends on the unified Intelligence picker. It
-recognizes the current English and Chinese effort labels, avoids matching
-`高` inside `极高`, and re-queries the composer pill after React replaces it so
-selection verification cannot rely on a detached stale node.
+## Explicit API use
 
-## Compatibility with npm 0.15.2
+Use API mode only when that provider and any associated usage cost are authorized.
+Existing applicable authorization persists. Browser access does not establish
+API access. Do not auto-fallback to API after a browser failure.
 
-Do not pass `gpt-5.6` or `gpt-5.6-sol` to an unpatched npm 0.15.2 install. That
-release can normalize those labels to `gpt-5.2`. Use the explicit fallback:
+For authorized GPT-6 Astra API Pro execution, the existing CLI accepts:
 
-```bash
-npx -y @steipete/oracle@0.15.2 --engine browser --model gpt-5.5-pro \
-  -p "<task>" --file "src/**"
+```powershell
+oracle --engine api --model gpt-6-astra --reasoning-mode pro --reasoning-effort max --wait --prompt "Review this architecture." --file "docs/architecture.md"
 ```
 
-After upgrading to a release containing the GPT-5.6 model-selection and
-unified-picker changes, verify all of the following before removing the
-fallback guidance: `--help --verbose` exposes the new options, browser dry-run
-resolves both aliases to GPT-5.6 Sol, API routing selects first-party OpenAI,
-and a live browser run records strict GPT-5.6 selection evidence.
+`gpt-6-pro` is browser-only; use `gpt-6-astra` plus API reasoning settings.
+API reasoning settings do not control the browser picker. Check provider routing
+with `oracle --route --model gpt-6-astra` or the installed doctor's provider
+preflight without printing secrets. This skill does not assert live API access.
 
-## Golden path
-
-1. Pick the smallest file set that still contains the truth.
-2. Preview the bundle with `--dry-run` and `--files-report`.
-3. Use browser mode for GPT-5.6; use API only when explicitly intended.
-4. If a run detaches or times out, reattach to the stored session instead of
-   starting a duplicate.
-
-## Commands
-
-- Show help:
-  - `npx -y @steipete/oracle --help --verbose`
-
-- Preview without calling a model:
-  - `npx -y @steipete/oracle --dry-run summary -p "<task>" --file "src/**" --file "!**/*.test.*"`
-  - `npx -y @steipete/oracle --dry-run full -p "<task>" --file "src/**"`
-
-- Inspect token usage:
-  - `npx -y @steipete/oracle --dry-run summary --files-report -p "<task>" --file "src/**"`
-
-- Browser run:
-  - `oracle --engine browser --browser-manual-login --model gpt-5.6-sol --browser-thinking-time extra-high -p "<task>" --file "src/**"`
-
-- Manual paste fallback:
-  - `npx -y @steipete/oracle --render-markdown --copy-markdown -p "<task>" --file "src/**"`
-  - `--render` is an alias for `--render-markdown`.
-
-- Performance trace:
-  - `npx -y @steipete/oracle --perf-trace --perf-trace-path /tmp/oracle-perf.json --dry-run summary -p "<task>" --file "src/**"`
-
-## Attaching files
-
-`--file` accepts files, directories, and globs. Pass it multiple times or use
-comma-separated entries.
-
-- Include: `--file "src/**"`, `--file src/index.ts`, `--file docs --file README.md`
-- Exclude: prefix a pattern with `!`, for example `--file "!src/**/*.test.ts"`
-- Default ignored directories: `node_modules`, `dist`, `coverage`, `.git`,
-  `.turbo`, `.next`, `build`, and `tmp`
-- Globs honor `.gitignore` and do not follow symlinks.
-- Dotfiles require an explicit dot-segment in the pattern, such as
-  `--file ".github/**"`.
-- Files over 1 MB are rejected by default; configure
-  `ORACLE_MAX_FILE_SIZE_BYTES` or `maxFileSizeBytes` when necessary.
-
-Keep total input under roughly 196k tokens. Use `--files-report` or
-`--dry-run json` to identify oversized inputs. Never attach `.env` files,
-private keys, auth tokens, or other secrets unless they have been redacted and
-are essential to the question.
-
-## Engines and browser controls
-
-- Auto-selection uses API when `OPENAI_API_KEY` is set and browser otherwise.
-- Browser supports GPT models through ChatGPT and Gemini models through Gemini
-  web. API-only models include `gpt-5.1-codex`.
-- Current model families include GPT-5.5/5.4/5.2/5.1, Gemini 3.x, and Claude
-  4.x; availability depends on engine and provider.
-- API runs require explicit user consent because they may incur usage costs.
-- Browser attachments use `--browser-attachments auto|never|always`.
-- Browser uploads keep one text/source file native and bundle multiple
-  text/source files. `auto` keeps flattened text for text-only uploads; use
-  `--browser-bundle-format zip` for a filesystem tree, or `--browser-bundle-files`
-  to force every resolved attachment into one bundle.
-- Reuse an existing Chrome session with `--browser-tab <ref>`,
-  `--browser-attach-running`, or `--remote-chrome <host:port>`.
-- Use `--browser-model-strategy select|current|ignore` to control picker
-  behavior.
-- Use `--browser-follow-up "<prompt>"` for another turn in the same browser
-  conversation, or `--followup <sessionId|responseId>` for a stored run.
-- Use `--browser-research deep` only when Deep Research is explicitly wanted.
-
-## API preflight
-
-Before an API run, check provider readiness without printing secrets:
-
-```bash
-oracle doctor --providers --models gpt-5.4,claude-4.6-sonnet,gemini-3-pro
-oracle --preflight --models gpt-5.4,gemini-3-pro
-oracle --route --model gpt-5.4
-```
-
-Use `--provider openai` or `--no-azure` when first-party OpenAI routing is
-required. For multi-model panels where partial success is useful, use
-`--allow-partial --write-output <path>` so successful outputs and the manifest
-can be recovered.
-
-Set an explicit deadline for automation, for example `--timeout 10m`; Oracle
-derives the HTTP timeout unless `--http-timeout` is supplied.
-
-## Sessions and recovery
-
-- Sessions are stored under `~/.oracle/sessions`; override with
-  `ORACLE_HOME_DIR`.
-- Browser artifacts include `transcript.md` and, when available, research
-  reports and generated images.
-- List recent sessions with `oracle status --hours 72`.
-- Attach with `oracle session <id> --render`.
-- Use `--slug "<3-5 words>"` for readable session IDs.
-- If a run times out, reattach; do not re-run it. Use `--force` only when a
-  genuinely new identical run is intended.
-- Successful non-project browser one-shots are archived automatically by
-  default; override with `--browser-archive never|always`.
-
-## Prompt template
-
-Oracle starts with zero project knowledge. Include:
-
-- Project briefing: stack, services, build/test commands, and platform constraints
-- Where things live: entrypoints, configs, key modules, and dependency boundaries
-- Exact question, prior attempts, and verbatim error text
-- Constraints such as API compatibility, performance budgets, and files not to change
-- Desired output such as a patch plan, tests, risk list, or tradeoff comparison
-
-For a long investigation, make the prompt restorable: put a 6–30 sentence
-briefing at the top, concrete reproduction and errors in the middle, and attach
-all context files required by a fresh model at the bottom. Oracle runs are
-one-shot; the model does not remember prior runs.
+Return the answer or incomplete state, session reference, actual transport,
+requested model/effort, available selection evidence, and any unverified
+constraint that matters to the request.

@@ -2056,21 +2056,20 @@ async function runBrowserModeInternal(
         expectedConversationId(),
       ).catch(() => null);
       const finalText = typeof finalSnapshot?.text === "string" ? finalSnapshot.text.trim() : "";
-      if (finalText && finalText !== turnPrompt.trim()) {
-        const trimmedMarkdown = turnAnswerMarkdown.trim();
-        const finalIsEcho = promptEchoMatcher ? promptEchoMatcher.isEcho(finalText) : false;
-        const lengthDelta = finalText.length - trimmedMarkdown.length;
-        const missingCopy = !copiedMarkdown && lengthDelta >= 0;
-        const likelyTruncatedCopy =
-          copiedMarkdown &&
-          trimmedMarkdown.length > 0 &&
-          lengthDelta >= Math.max(12, Math.floor(trimmedMarkdown.length * 0.75));
-        if ((missingCopy || likelyTruncatedCopy) && !finalIsEcho && finalText !== trimmedMarkdown) {
-          logger("Refreshed assistant response via final DOM snapshot");
-          turnAnswerText = finalText;
-          turnAnswerMarkdown = finalText;
-        }
+      const finalReconciliation = await reconcileFinalAssistantSnapshot({
+        answerText: turnAnswerText,
+        answerMarkdown: turnAnswerMarkdown,
+        copiedMarkdown,
+        finalText,
+        turnPrompt,
+        recaptureMarkdown: () =>
+          raceWithDisconnect(captureAssistantMarkdown(Runtime, turnAnswer.meta, logger)),
+      });
+      if (finalReconciliation.refreshed) {
+        logger("Refreshed assistant response via final DOM snapshot");
       }
+      turnAnswerText = finalReconciliation.answerText;
+      turnAnswerMarkdown = finalReconciliation.answerMarkdown;
 
       // Detect prompt echo using normalized comparison (whitespace-insensitive).
       const alignedEcho = alignPromptEchoPair(
@@ -2698,6 +2697,61 @@ async function waitForLogin({
       `Browser mode is using Oracle's private Chrome profile at ${profileDir ?? "(default profile)"}, not your normal Chrome profile. ` +
       `Run first-time setup, sign in there, then retry: ${setupCommand}`,
   );
+}
+
+async function reconcileFinalAssistantSnapshot({
+  answerText,
+  answerMarkdown,
+  copiedMarkdown,
+  finalText,
+  turnPrompt,
+  recaptureMarkdown,
+}: {
+  answerText: string;
+  answerMarkdown: string;
+  copiedMarkdown: string | null;
+  finalText: string;
+  turnPrompt: string;
+  recaptureMarkdown?: () => Promise<string | null>;
+}): Promise<{ answerText: string; answerMarkdown: string; refreshed: boolean }> {
+  const latest = finalText.trim();
+  const echoMatcher = buildPromptEchoMatcher(turnPrompt);
+  if (!latest || latest === turnPrompt.trim() || echoMatcher?.isEcho(latest)) {
+    return { answerText, answerMarkdown, refreshed: false };
+  }
+  const updatedText = latest.length >= answerText.trim().length ? latest : answerText;
+
+  if (copiedMarkdown) {
+    // The DOM snapshot is innerText and can include citation controls. It cannot
+    // replace a successful Markdown copy without losing lists and code fences.
+    if (latest.length > answerText.trim().length || latest.length > answerMarkdown.trim().length) {
+      const freshMarkdown = await recaptureMarkdown?.().catch(() => null);
+      if (
+        freshMarkdown &&
+        freshMarkdown.trim() !== answerMarkdown.trim() &&
+        freshMarkdown.trim().length >= answerMarkdown.trim().length
+      ) {
+        return { answerText: updatedText, answerMarkdown: freshMarkdown, refreshed: true };
+      }
+      const trimmedMarkdown = answerMarkdown.trim();
+      const lengthDelta = latest.length - trimmedMarkdown.length;
+      if (
+        !freshMarkdown &&
+        trimmedMarkdown.length > 0 &&
+        lengthDelta >= Math.max(12, Math.floor(trimmedMarkdown.length * 0.75))
+      ) {
+        // A failed re-copy leaves only the substantially longer DOM capture.
+        return { answerText: updatedText, answerMarkdown: latest, refreshed: true };
+      }
+      return { answerText: updatedText, answerMarkdown, refreshed: true };
+    }
+    return { answerText, answerMarkdown, refreshed: false };
+  }
+
+  if (latest.length >= answerMarkdown.trim().length && latest !== answerMarkdown.trim()) {
+    return { answerText: updatedText, answerMarkdown: latest, refreshed: true };
+  }
+  return { answerText, answerMarkdown, refreshed: false };
 }
 
 async function maybeRecoverLongAssistantResponse({
@@ -3654,16 +3708,19 @@ async function runRemoteBrowserMode(
         expectedConversationId(),
       ).catch(() => null);
       const finalText = typeof finalSnapshot?.text === "string" ? finalSnapshot.text.trim() : "";
-      if (
-        finalText &&
-        finalText !== turnAnswerMarkdown.trim() &&
-        finalText !== turnPrompt.trim() &&
-        finalText.length >= turnAnswerMarkdown.trim().length
-      ) {
+      const finalReconciliation = await reconcileFinalAssistantSnapshot({
+        answerText: turnAnswerText,
+        answerMarkdown: turnAnswerMarkdown,
+        copiedMarkdown,
+        finalText,
+        turnPrompt,
+        recaptureMarkdown: () => captureAssistantMarkdown(Runtime, turnAnswer.meta, logger),
+      });
+      if (finalReconciliation.refreshed) {
         logger("Refreshed assistant response via final DOM snapshot");
-        turnAnswerText = finalText;
-        turnAnswerMarkdown = finalText;
       }
+      turnAnswerText = finalReconciliation.answerText;
+      turnAnswerMarkdown = finalReconciliation.answerMarkdown;
 
       // Detect prompt echo using normalized comparison (whitespace-insensitive).
       const promptEchoMatcher = buildPromptEchoMatcher(turnPrompt);
@@ -3992,6 +4049,7 @@ export const __test__ = {
   listIgnoredRemoteChromeFlags,
   normalizeAuthenticatedModelSelectionError,
   pollGeneratedImageOrTextAssistantResponse,
+  reconcileFinalAssistantSnapshot,
   resolveManualLoginWaitMs,
   shouldApplyThinkingTimeSelection,
   shouldCleanupBlankTabsAfterLastLease,

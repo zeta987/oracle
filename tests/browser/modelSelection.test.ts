@@ -1345,26 +1345,42 @@ describe("browser model selection matchers", () => {
     );
   });
 
-  it.each(["最新", "최신"])(
+  it.each(["最新", "最新的", "최신"])(
     "matches the exact localized Latest radio %s without accepting GPT-5.6 Sol",
     async (label) => {
-      const { labelTokens } = buildModelMatchersLiteralForTest("Latest");
-      expect(labelTokens).toContain(label);
       await expect(
         evaluateMenuModelSelectionExpression("Latest", {
           label,
           selectedButtonLabel: "6 Pro",
         }),
       ).resolves.toMatchObject({ status: "switched", label });
+      const { labelTokens } = buildModelMatchersLiteralForTest("Latest");
+      expect(labelTokens).toContain(label);
       await expect(
         evaluateMenuModelSelectionExpression("Latest", { label: "GPT-5.6 Sol" }),
       ).resolves.toMatchObject({ status: "option-not-found" });
     },
   );
 
+  it.each(["最新的下一代", "最新的 Pro"])(
+    "rejects a longer label that starts with the localized Latest radio: %s",
+    async (label) => {
+      await expect(
+        evaluateMenuModelSelectionExpression("Latest", { label }),
+      ).resolves.toMatchObject({ status: "option-not-found" });
+    },
+  );
+
   it("accepts only exact localized Latest evidence after selection", () => {
     expect(() => assertResolvedModelSelectionForTest("Latest", "最新")).not.toThrow();
+    expect(() => assertResolvedModelSelectionForTest("Latest", "最新的")).not.toThrow();
     expect(() => assertResolvedModelSelectionForTest("Latest", "최신")).not.toThrow();
+    expect(() => assertResolvedModelSelectionForTest("Latest", "最新的下一代")).toThrow(
+      /requires GPT-6 Astra/,
+    );
+    expect(() => assertResolvedModelSelectionForTest("Latest", "最新的 Pro")).toThrow(
+      /requires GPT-6 Astra/,
+    );
     expect(() => assertResolvedModelSelectionForTest("Latest", "최신 아님")).toThrow(
       /requires GPT-6 Astra/,
     );
@@ -1372,6 +1388,27 @@ describe("browser model selection matchers", () => {
     expect(() => assertResolvedModelSelectionForTest("Latest", "GPT-5.6 Sol")).toThrow(
       /requires GPT-6 Astra/,
     );
+  });
+
+  it("warns when an implicit default would replace the localized Latest selection", async () => {
+    const runtime = {
+      evaluate: vi
+        .fn()
+        .mockResolvedValueOnce({
+          result: { value: { status: "already-selected", label: "最新的" } },
+        })
+        .mockResolvedValueOnce({
+          result: { value: { status: "already-selected", label: "GPT-5.5 Pro" } },
+        }),
+    };
+    const logger = vi.fn();
+
+    await ensureModelSelection(runtime as never, "GPT-5.5 Pro", logger as never, "select", {
+      implicitDefault: true,
+      buttonWaitMs: 0,
+    });
+
+    expect(logger).toHaveBeenCalledWith(expect.stringContaining('switch ChatGPT from "最新的"'));
   });
 
   it("includes real pointer coordinates when opening version submenus", () => {

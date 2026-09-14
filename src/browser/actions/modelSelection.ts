@@ -133,7 +133,7 @@ export async function ensureModelSelection(
 }
 
 function isNewerModelLabel(current: string, target: string): boolean {
-  const latest = /^(?:Latest|最新|최신)$/i;
+  const latest = /^(?:Latest|最新|最新的|최신)$/i;
   if (latest.test(current.trim())) return !latest.test(target.trim());
   const version = (label: string): [number, number] | null => {
     const match = label.match(/(?:^|gpt[- ]*|thinking\s+)(\d+)(?:\.(\d+))?/i);
@@ -155,6 +155,7 @@ function assertResolvedModelSelection(desiredModel: string, resolvedLabel: strin
     if (
       resolvedLabel.normalize("NFC").trim() === "Latest" ||
       resolvedLabel.normalize("NFC").trim() === "最新" ||
+      resolvedLabel.normalize("NFC").trim() === "最新的" ||
       resolvedLabel.normalize("NFC").trim() === "최신"
     ) {
       return;
@@ -282,12 +283,12 @@ function buildModelSelectionExpression(
     // "6 Pro" / "6 High"…, while GPT-5.6 Sol's reads "5.6 Pro". Declared up front: getResolvedLabel
     // runs on the picker-less path before the selection helpers below are initialized.
     const targetIsLatest = normalizedTarget === 'latest';
-    // ChatGPT localizes the Latest radio itself (for example, Japanese "最新") but
+    // ChatGPT localizes the Latest radio itself (for example, "最新" or "最新的") but
     // keeps the GPT-6 composer pill numeric. Keep this allow-list exact so GPT-5.6
     // Sol or an arbitrary localized menu row can never satisfy a Latest request.
     const isLatestModelLabel = (value) => {
       const label = String(value ?? '').normalize('NFC').trim();
-      return label === 'Latest' || label === '最新' || label === '최신';
+      return label === 'Latest' || label === '最新' || label === '最新的' || label === '최신';
     };
     const normalizedTokens = Array.from(new Set([normalizedTarget, ...LABEL_TOKENS]))
       .map((token) => normalizeText(token))
@@ -1558,8 +1559,9 @@ function buildModelMatchersLiteral(targetModel: string): {
     testIdTokens.add("gpt56");
   }
   if (base === "latest") {
-    // Exact Japanese and Korean labels for the advanced-model Latest radio.
+    // Exact localized labels for the advanced-model Latest radio.
     push("最新", labelTokens);
+    push("最新的", labelTokens);
     push("최신", labelTokens);
   }
   // Numeric variations (5.5 <-> 55 <-> gpt-5-5)

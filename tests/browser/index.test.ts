@@ -18,6 +18,122 @@ import { resolveBrowserConfig } from "../../src/browser/config.js";
 import { redactBrowserConfigForDebugLog } from "../../src/browser/configLogging.js";
 import { BrowserAutomationError } from "../../src/oracle/errors.js";
 
+describe("final assistant DOM snapshot reconciliation", () => {
+  test("keeps copied code fences when a file citation makes final DOM text longer", async () => {
+    const answerText = "SOL_UPLOAD_OK\n\nORACLE_BROWSER_FIXTURE_20260914\n\n42";
+    const answerMarkdown = "SOL_UPLOAD_OK\n\n```text\nORACLE_BROWSER_FIXTURE_20260914\n```\n\n42";
+    const finalText = `${answerText}\n\nbrowser-model-fixture browser-model-fixture`;
+    expect(finalText.length).toBeGreaterThan(answerMarkdown.length);
+
+    const result = await __test__.reconcileFinalAssistantSnapshot({
+      answerText,
+      answerMarkdown,
+      copiedMarkdown: answerMarkdown,
+      finalText,
+      turnPrompt: "Read the uploaded fixture",
+      recaptureMarkdown: async () => {
+        throw new Error("copy unavailable");
+      },
+    });
+    expect(result).toEqual({ answerText: finalText, answerMarkdown, refreshed: true });
+    expect(formatBrowserTurnTranscript([{ label: "Answer", ...result }]).answerMarkdown).toContain(
+      "```text\nORACLE_BROWSER_FIXTURE_20260914\n```",
+    );
+  });
+
+  test("uses a longer final DOM snapshot when Markdown copy is unavailable", async () => {
+    const finalText = "First line\n\nLate second line";
+    expect(
+      await __test__.reconcileFinalAssistantSnapshot({
+        answerText: "First line",
+        answerMarkdown: "First line",
+        copiedMarkdown: null,
+        finalText,
+        turnPrompt: "Write two lines",
+      }),
+    ).toEqual({ answerText: finalText, answerMarkdown: finalText, refreshed: true });
+  });
+
+  test("selects fresh Markdown containing a later answer line", async () => {
+    const answerMarkdown = "- First line\n- Second line";
+    const completedMarkdown = `${answerMarkdown}\n- Late third line`;
+    const finalText = "First line\nSecond line\nLate third line";
+    const result = await __test__.reconcileFinalAssistantSnapshot({
+      answerText: "First line\nSecond line",
+      answerMarkdown,
+      copiedMarkdown: answerMarkdown,
+      finalText,
+      turnPrompt: "Write a list",
+      recaptureMarkdown: async () => completedMarkdown,
+    });
+    expect(result).toEqual({
+      answerText: finalText,
+      answerMarkdown: completedMarkdown,
+      refreshed: true,
+    });
+    expect(formatBrowserTurnTranscript([{ label: "Answer", ...result }]).answerMarkdown).toContain(
+      "- Late third line",
+    );
+  });
+
+  test("recaptures Markdown after delayed re-read already completed plain text", async () => {
+    const answerMarkdown = `- ${"Initial section ".repeat(40).trim()}`;
+    const lateLine = `- ${"Late completed section ".repeat(30).trim()}`;
+    const finalText = `${"Initial section ".repeat(40).trim()}\n${"Late completed section ".repeat(30).trim()}`;
+    const completedMarkdown = `${answerMarkdown}\n${lateLine}`;
+    const recaptureMarkdown = vi.fn(async () => completedMarkdown);
+
+    const result = await __test__.reconcileFinalAssistantSnapshot({
+      answerText: finalText,
+      answerMarkdown,
+      copiedMarkdown: answerMarkdown,
+      finalText,
+      turnPrompt: "Write a long list",
+      recaptureMarkdown,
+    });
+
+    expect(recaptureMarkdown).toHaveBeenCalledOnce();
+    expect(result.answerMarkdown).toBe(completedMarkdown);
+    expect(formatBrowserTurnTranscript([{ label: "Answer", ...result }]).answerMarkdown).toContain(
+      lateLine,
+    );
+  });
+
+  test("recovers full text when a formatted copy cannot be refreshed", async () => {
+    const finalText = "First line\n\nA substantial late second line completes the answer";
+    const result = await __test__.reconcileFinalAssistantSnapshot({
+      answerText: "First line",
+      answerMarkdown: "```text\nFirst line\n```",
+      copiedMarkdown: "```text\nFirst line\n```",
+      finalText,
+      turnPrompt: "Write two lines",
+      recaptureMarkdown: async () => {
+        throw new Error("copy unavailable");
+      },
+    });
+    expect(result).toEqual({ answerText: finalText, answerMarkdown: finalText, refreshed: true });
+    expect(formatBrowserTurnTranscript([{ label: "Answer", ...result }]).answerMarkdown).toContain(
+      "A substantial late second line",
+    );
+  });
+
+  test("does not replace the answer with a longer prompt echo", async () => {
+    const answerMarkdown = "```text\nactual answer\n```";
+    const recaptureMarkdown = vi.fn(async () => answerMarkdown);
+    expect(
+      await __test__.reconcileFinalAssistantSnapshot({
+        answerText: "actual answer",
+        answerMarkdown,
+        copiedMarkdown: answerMarkdown,
+        finalText: "Read the uploaded fixture  and provide the actual answer",
+        turnPrompt: "Read the uploaded fixture and provide the actual answer",
+        recaptureMarkdown,
+      }),
+    ).toEqual({ answerText: "actual answer", answerMarkdown, refreshed: false });
+    expect(recaptureMarkdown).not.toHaveBeenCalled();
+  });
+});
+
 describe("generated image response failures", () => {
   test("rejects a current Retry failure instead of accepting its text as an image answer", async () => {
     const evaluate = vi.fn().mockResolvedValue({
